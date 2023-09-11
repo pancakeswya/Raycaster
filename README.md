@@ -10,4 +10,4 @@ Makefile soon
 
 - Only one feature is to walk around drown map in fake 3D space
 
-![](misc/raycaster)
+![](misc/raycaster.gif)
