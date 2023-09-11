@@ -4,7 +4,7 @@ Ray cast algorithm implementation based on SDL
 ## Brief
 To compile:
 ```
-g++ main.cc gamewindow.cc raycast.cc -lSDL2
+g++ raycaster/main.cc raycaster/gamewindow.cc raycaster/raycast.cc -lSDL2
 ```
 Makefile soon
 
