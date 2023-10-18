@@ -1,39 +1,67 @@
 #include "player.h"
 #include "config.h"
-#include "degreem.h"
+
+#include <cmath>
 
 namespace rcg {
 
-void Player::MoveForward() noexcept {
-  pov_ = dgm::ToValidDegrees(pov_);
-  x_ += config::kMoveSpeed  * std::cos(dgm::DegreeToRadians(pov_));
-  y_ -= config::kMoveSpeed * std::sin(dgm::DegreeToRadians(pov_));
+void Player::SetMoveSpeed(float speed) noexcept {
+  movement_speed_ = speed;
 }
 
-void Player::MoveBackward() noexcept {
-  pov_ = dgm::ToValidDegrees(pov_);
-  x_ -= config::kMoveSpeed * std::cos(dgm::DegreeToRadians(pov_));
-  y_ += config::kMoveSpeed * std::sin(dgm::DegreeToRadians(pov_));
+void Player::SetRotationSpeed(float speed) noexcept {
+  rotation_speed_ = speed;
 }
 
-void Player::MoveLeft() noexcept {
-  pov_ = dgm::ToValidDegrees(pov_);
-  x_ += config::kMoveSpeed * std::cos(dgm::DegreeToRadians(dgm::ToValidDegrees(90 + pov_)));
-  y_ -= config::kMoveSpeed * std::sin(dgm::DegreeToRadians(dgm::ToValidDegrees(90 + pov_)));
+void Player::MoveForwardX() noexcept {
+  x_ += dir_x_ * movement_speed_;
 }
 
-void Player::MoveRight() noexcept {
-  pov_ = dgm::ToValidDegrees(pov_);
-  x_ += config::kMoveSpeed * std::cos(dgm::DegreeToRadians(dgm::ToValidDegrees(pov_ - 90)));
-  y_ -= config::kMoveSpeed * std::sin(dgm::DegreeToRadians(dgm::ToValidDegrees(pov_ - 90)));
+void Player::MoveForwardY() noexcept {
+  y_ += dir_y_ * movement_speed_;
+}
+
+void Player::MoveBackwardX() noexcept {
+  x_ -= dir_x_ * movement_speed_;
+}
+
+void Player::MoveBackwardY() noexcept {
+  y_ -= dir_y_ * movement_speed_;
+}
+
+void Player::MoveLeftX() noexcept {
+  x_ -= plane_x_ * movement_speed_;
+}
+
+void Player::MoveLeftY() noexcept {
+  y_ -= plane_y_ * movement_speed_;
+}
+
+void Player::MoveRightX() noexcept {
+  x_ += plane_x_ * movement_speed_;
+}
+
+void Player::MoveRightY() noexcept {
+  y_ += plane_y_ * movement_speed_;
 }
 
 void Player::RotateLeft() noexcept {
-  pov_ += config::kRotationSpeed;
+  float old_dir_x = dir_x_;
+  dir_x_ = dir_x_ * std::cos(rotation_speed_) - dir_y_ * std::sin(rotation_speed_);
+  dir_y_ = old_dir_x * std::sin(rotation_speed_) + dir_y_ * std::cos(rotation_speed_);
+  float old_plane_x = plane_x_;
+  plane_x_ = plane_x_ * std::cos(rotation_speed_) - plane_y_ * std::sin(rotation_speed_);
+  plane_y_ = old_plane_x * std::sin(rotation_speed_) + plane_y_ * std::cos(rotation_speed_);
 }
 
 void Player::RotateRight() noexcept {
-  pov_ -= config::kRotationSpeed;
+  float old_dir_x = dir_x_;
+  dir_x_ = dir_x_ * std::cos(-rotation_speed_) - dir_y_ * std::sin(-rotation_speed_);
+  dir_y_ = old_dir_x * std::sin(-rotation_speed_) + dir_y_ * std::cos(-rotation_speed_);
+  float old_plane_x = plane_x_;
+  plane_x_ = plane_x_ * std::cos(-rotation_speed_) - plane_y_ * std::sin(-rotation_speed_);
+  plane_y_ = old_plane_x * std::sin(-rotation_speed_) + plane_y_ * std::cos(-rotation_speed_);
 }
+
 
 } // namespace rcg

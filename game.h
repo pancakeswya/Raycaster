@@ -2,42 +2,30 @@
 #define GAME_H_
 
 #include "player.h"
-#include "config.h"
 
 #include <SFML/Graphics.hpp>
 
-#include <array>
-#include <vector>
 #include <string_view>
+#include <vector>
 
 namespace rcg {
-
-enum class Cell : bool {
-  kWall,
-  kEmpty
-};
 
 class Game {
  public:
   Game(std::string_view name);
-  void Loop();
+  [[nodiscard]] bool Loaded() noexcept;
+  void MainLoop();
  protected:
-  void UpdateRays();
-  void UpdatePlayer();
-  void DrawMap();
-  void DrawRays();
-  void Draw3dSpace();
-  void DrawMapCells();
-  void DrawPlayer();
+  void Raycast(sf::Image& buffer);
+  void UpdateView(sf::Image& buffer);
+  void UpdatePlayer(float frame_time);
  private:
-  Player player_;
-  std::vector<std::vector<Cell>> map_;
-  std::array<float, config::kWindowWidth> view_rays_;
+  bool loaded_;
   sf::RenderWindow window_;
-  sf::Texture grid_texture_, wall_texture_, player_texture_, ig_wall_texture_;
-  sf::Sprite grid_sprite_, wall_sprite_, player_sprite_, ig_wall_sprite_;
+  std::vector<sf::Image> textures_;
+  Player player_;
+  std::vector<std::vector<int>> world_map_;
 };
-
 
 } // namespace rcg
 

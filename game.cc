@@ -1,318 +1,271 @@
 #include "game.h"
-#include "degreem.h"
+#include "player.h"
+#include "config.h"
 
-#include <chrono>
-#include <iostream>
-#include <limits>
+#include <cmath>
 
 namespace rcg {
 
 namespace {
 
-std::vector<std::vector<Cell>> LoadMap(std::string_view map_path) {
-  sf::Image map_sketch;
-  map_sketch.loadFromFile(map_path.data());
-
-  std::vector<std::vector<Cell>> map(config::kMapWidth, std::vector<Cell>(config::kMapHeight,Cell::kEmpty));
-
-  for(int i = 0; i < config::kMapWidth; ++i) {
-    for(int j = 0; j < config::kMapHeight; ++j) {
-      sf::Color pixel = map_sketch.getPixel(i, j);
-      if (pixel == sf::Color::Black) {
-        map[i][j] = Cell::kWall;
-      }
+std::vector<std::vector<int>> LoadMap() {
+  std::vector<std::vector<int>> map(config::kMapWidth, std::vector<int>(config::kMapHeight));
+  for(int y = 0; y < config::kMapWidth; ++y) {
+    for(int x = 0; x < config::kMapHeight; ++x) {
+      map[y][x] = config::kWorldMap[y][x];
     }
   }
   return map;
 }
 
-bool CollidesWithMap(float x, float y, const std::vector<std::vector<Cell>>& map) {
-  float cell_x = x / config::kCellSize;
-  float cell_y = y / config::kCellSize;
-  int curr_x = int(std::floor(cell_x));
-  int curr_y = int(std::floor(cell_y));
-  int next_x = int(std::ceil(cell_x));
-  int next_y = int(std::ceil(cell_y));
-  return map[curr_x][curr_y] == Cell::kWall || map[next_x][curr_y] == Cell::kWall ||
-      map[curr_x][next_y] == Cell::kWall || map[next_x][next_y] == Cell::kWall;
+inline sf::Color DarkerColor(sf::Color color) noexcept {
+  color.r /= config::kShadingCoef;
+  color.g /= config::kShadingCoef;
+  color.b /= config::kShadingCoef;
+  return color;
 }
-
-void HandlePlayerKeys(Player& player) {
-  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
-    player.RotateLeft();
-  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
-    player.RotateRight();
-  }
-
-  if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
-    player.MoveLeft();
-  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
-    player.MoveRight();
-  }
-
-  if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
-    player.MoveBackward();
-  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
-    player.MoveForward();
-  }
-}
-
 
 } // namespace
 
+void Game::UpdatePlayer(float frame_time) {
+  float move_speed = frame_time * config::kMoveSpeed;
+  float rotation_speed = frame_time * config::kRotationSpeed;
+
+  player_.SetMoveSpeed(move_speed);
+  player_.SetRotationSpeed(rotation_speed);
+
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
+    player_.RotateLeft();
+  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
+    player_.RotateRight();
+  }
+
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
+    if (!world_map_[int(player_.X() - player_.DirX() * move_speed)][int(player_.Y())]) {
+      player_.MoveBackwardX();
+    }
+    if (!world_map_[int(player_.X())][int(player_.Y()  - player_.DirY() * move_speed)]) {
+      player_.MoveBackwardY();
+    }
+  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
+    if (!world_map_[int(player_.X() + player_.DirX() * move_speed)][int(player_.Y())]) {
+      player_.MoveForwardX();
+    }
+    if (!world_map_[int(player_.X())][int(player_.Y()  + player_.DirY() * move_speed)]) {
+      player_.MoveForwardY();
+    }
+  }
+
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
+    if (!world_map_[int(player_.X() - player_.PlaneX() * move_speed)][int(player_.Y())]) {
+      player_.MoveLeftX();
+    }
+    if (!world_map_[int(player_.X())][int(player_.Y()  - player_.PlaneY() * move_speed)]) {
+      player_.MoveLeftY();
+    }
+  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
+    if (!world_map_[int(player_.X() + player_.PlaneX() * move_speed)][int(player_.Y())]) {
+      player_.MoveRightX();
+    }
+    if (!world_map_[int(player_.X())][int(player_.Y()  + player_.PlaneY() * move_speed)]) {
+      player_.MoveRightY();
+    }
+  }
+}
 
 Game::Game(std::string_view name)
-  : player_(config::kPlayerStartX,config::kPlayerStartY), map_(LoadMap(config::kMapPath.data())),
-    window_(sf::VideoMode(config::kWindowWidth, config::kWindowHeight), name.data(), sf::Style::Close) {
-
-  window_.setView(sf::View(sf::FloatRect(0, 0, config::kWindowWidth, config::kWindowHeight)));
-
-  grid_texture_.loadFromFile(config::kMapGridCellPath.data());
-  wall_texture_.loadFromFile(config::kMapWallPath.data());
-  player_texture_.loadFromFile(config::kMapPlayerPath.data());
-  ig_wall_texture_.loadFromFile(config::kIgWallPath.data());
-
-  wall_sprite_.setTexture(wall_texture_);
-  grid_sprite_.setTexture(grid_texture_);
-  player_sprite_.setTexture(player_texture_);
-  ig_wall_sprite_.setTexture(ig_wall_texture_);
-
-  grid_sprite_.setTextureRect(sf::IntRect(0, 0, config::kMapGridCellSize, config::kMapGridCellSize));
+    : player_(config::kStartX, config::kStartY,
+              config::kStartDirX, config::kStartDirY,
+              config::kStartPlaneX, config::kStartPlaneY),
+      loaded_(true),
+      window_(sf::VideoMode(config::kWindowWidth, config::kWindowHeight), name.data(), sf::Style::Close),
+      textures_(config::kTextureCount),
+      world_map_(LoadMap()) {
+  window_.setSize(sf::Vector2u(config::kResizeWindow * config::kWindowWidth,
+                               config::kResizeWindow * config::kWindowHeight));
+  window_.setFramerateLimit(config::kFps);
+  loaded_ &= textures_[0].loadFromFile("pics/eagle.png");
+  loaded_ &= textures_[1].loadFromFile("pics/redbrick.png");
+  loaded_ &= textures_[2].loadFromFile("pics/purplestone.png");
+  loaded_ &= textures_[3].loadFromFile("pics/greystone.png");
+  loaded_ &= textures_[4].loadFromFile("pics/bluestone.png");
+  loaded_ &= textures_[5].loadFromFile("pics/mossy.png");
+  loaded_ &= textures_[6].loadFromFile("pics/wood.png");
+  loaded_ &= textures_[7].loadFromFile("pics/colorstone.png");
 }
 
-void Game::UpdatePlayer() {
-  Player next_player = player_;
-  HandlePlayerKeys(next_player);
-  if (!CollidesWithMap(next_player.X(), next_player.Y(), map_)) {
-    std::swap(player_, next_player);
-  } else if (!CollidesWithMap(next_player.X(), player_.Y(), map_)) {
-    player_.SetX(next_player.X());
-    player_.SetY(config::kCellSize * std::round(player_.Y() / config::kCellSize));
-  } else if (!CollidesWithMap(player_.X(), next_player.Y(), map_)) {
-    player_.SetX(config::kCellSize * std::round(player_.X() / config::kCellSize));
-    player_.SetY(next_player.Y());
-  } else {
-    player_.SetX(config::kCellSize * std::round(player_.X() / config::kCellSize));
-    player_.SetY(config::kCellSize * std::round(player_.Y() / config::kCellSize));
+bool Game::Loaded() noexcept {
+  return loaded_;
+}
+
+void Game::Raycast(sf::Image& buffer) {
+  // cast a floor
+  for (int y = config::kWindowHeight / 2 + 1; y < config::kWindowHeight; ++y) {
+    float ray_dir_x0 = player_.DirX() - player_.PlaneX();
+    float ray_dir_y0 = player_.DirY() - player_.PlaneY();
+    float ray_dir_x1 = player_.DirX() + player_.PlaneX();
+    float ray_dir_y1 = player_.DirY() + player_.PlaneY();
+
+    int p = y - config::kWindowHeight / 2;
+    float pos_z = 0.5f * config::kWindowHeight;
+    float row_distance = pos_z / p;
+
+    float floor_step_x = row_distance * (ray_dir_x1 - ray_dir_x0) / config::kWindowWidth;
+    float floor_step_y = row_distance * (ray_dir_y1 - ray_dir_y0) / config::kWindowWidth;
+
+    float floor_x = player_.X() + row_distance * ray_dir_x0;
+    float floor_y = player_.Y() + row_distance * ray_dir_y0;
+
+    for (int x = 0; x < config::kWindowWidth; ++x) {
+      auto cell_x = static_cast<int>(floor_x);
+      auto cell_y = static_cast<int>(floor_y);
+
+      auto tx = static_cast<int>(config::kTexWidth * (floor_x - cell_x)) & (config::kTexWidth - 1);
+      auto ty = static_cast<int>(config::kTexHeight * (floor_y - cell_y)) & (config::kTexHeight - 1);
+
+      floor_x += floor_step_x;
+      floor_y += floor_step_y;
+
+      sf::Color color = textures_[config::kFloorTexture].getPixel(tx, ty);
+
+      buffer.setPixel(x, y, DarkerColor(color));
+
+      color = textures_[config::kCeilTexture].getPixel(tx, ty);
+
+      buffer.setPixel(x, config::kWindowHeight - y - 1, color);
+    }
   }
-}
+  // cast a wall
+  for (int x = 0; x < config::kWindowWidth; ++x) {
+    float camera_x = 2.0f * x / static_cast<float>(config::kWindowWidth) - 1;
+    float ray_dir_x = player_.DirX() + player_.PlaneX() * camera_x;
+    float ray_dir_y = player_.DirY() + player_.PlaneY() * camera_x;
 
-void Game::UpdateRays() {
-  for (int i = 0; i < config::kWindowWidth; ++i) {
-    int cell_step_x = 0;
-    int cell_step_y = 0;
+    auto map_x = static_cast<int>(player_.X());
+    auto map_y = static_cast<int>(player_.Y());
 
-    float ray_direction = dgm::ToValidDegrees(
-        player_.Pov() + config::kFov * (std::floor(0.5f * config::kWindowWidth) - i) / (config::kWindowWidth - 1));
-    float ray_direction_x = std::cos(dgm::DegreeToRadians(ray_direction));
-    float ray_direction_y = -std::sin(dgm::DegreeToRadians(ray_direction));
+    float side_dist_x, side_dist_y;
 
-    float ray_length = 0;
-    float ray_start_x = player_.X() + 0.5f * config::kCellSize;
-    float ray_start_y = player_.Y() + 0.5f * config::kCellSize;
+    float delta_dist_x = (ray_dir_x == 0.0f) ? 1e30f : std::abs(1.0f / ray_dir_x);
+    float delta_dist_y = (ray_dir_y == 0.0f) ? 1e30f : std::abs(1.0f / ray_dir_y);
+    float perp_wall_dist;
 
-    float x_ray_length = 0;
-    float y_ray_length = 0;
+    int step_x, step_y;
 
-    auto
-        x_ray_unit_length = float(config::kCellSize * std::sqrt(1 + std::pow(ray_direction_y / ray_direction_x, 2.0f)));
-    auto
-        y_ray_unit_length = float(config::kCellSize * std::sqrt(1 + std::pow(ray_direction_x / ray_direction_y, 2.0f)));
+    bool side;
 
-    auto current_cell_x = int(std::floor(ray_start_x / config::kCellSize));
-    auto current_cell_y = int(std::floor(ray_start_y / config::kCellSize));
-
-    if (ray_direction_x < 0) {
-      cell_step_x = -1;
-      x_ray_length = x_ray_unit_length * (ray_start_x / config::kCellSize - current_cell_x);
-    } else if (ray_direction_x > 0) {
-      cell_step_x = 1;
-      x_ray_length = x_ray_unit_length * (1 + current_cell_x - ray_start_x / config::kCellSize);
+    if (ray_dir_x < 0) {
+      step_x = -1;
+      side_dist_x = (player_.X() - map_x) * delta_dist_x;
+    } else {
+      step_x = 1;
+      side_dist_x = (map_x + 1.0f - player_.X()) * delta_dist_x;
     }
 
-    if (ray_direction_y < 0) {
-      cell_step_y = -1;
-      y_ray_length = y_ray_unit_length * (ray_start_y / config::kCellSize - current_cell_y);
-    } else if (ray_direction_y > 0) {
-      cell_step_y = 1;
-      y_ray_length = y_ray_unit_length * (1 + current_cell_y - ray_start_y / config::kCellSize);
+    if (ray_dir_y < 0) {
+      step_y = -1;
+      side_dist_y = (player_.Y() - map_y) * delta_dist_y;
+    } else {
+      step_y = 1;
+      side_dist_y = (map_y + 1.0f - player_.Y()) * delta_dist_y;
     }
 
-    while (ray_length <= config::kRenderDistance) {
-      bool corner_collision = false;
-
-      if (x_ray_length < y_ray_length) {
-        ray_length = x_ray_length;
-        x_ray_length += x_ray_unit_length;
-        current_cell_x += cell_step_x;
-      } else if (x_ray_length > y_ray_length) {
-        ray_length = y_ray_length;
-        y_ray_length += y_ray_unit_length;
-        current_cell_y += cell_step_y;
+    do {
+      if (side_dist_x < side_dist_y) {
+        side_dist_x += delta_dist_x;
+        map_x += step_x;
+        side = false;
       } else {
-        corner_collision = true;
-
-        ray_length = x_ray_length;
-        x_ray_length += x_ray_unit_length;
-        y_ray_length += y_ray_unit_length;
-
-        current_cell_x += cell_step_x;
-        current_cell_y += cell_step_y;
+        side_dist_y += delta_dist_y;
+        map_y += step_y;
+        side = true;
       }
+    } while (world_map_[map_x][map_y] <= 0);
 
-      if (current_cell_x >= 0 && current_cell_y >= 0 &&
-          current_cell_y < config::kMapHeight && current_cell_x < config::kMapWidth &&
-          (map_[current_cell_x][current_cell_y] == Cell::kWall ||
-              corner_collision &&
-                  map_[current_cell_x - cell_step_x][current_cell_y] == Cell::kWall &&
-                  map_[current_cell_x][current_cell_y - cell_step_y] == Cell::kWall)) {
-        break;
-      }
+    if (!side) {
+      perp_wall_dist = (side_dist_x - delta_dist_x);
+    } else {
+      perp_wall_dist = (side_dist_y - delta_dist_y);
     }
 
-    ray_length = std::min(config::kRenderDistance, ray_length);
-    view_rays_[i] = ray_length;
-  }
-}
+    int line_height = static_cast<int>(config::kWindowHeight / perp_wall_dist);
 
-void Game::DrawMapCells() {
-  int scaled_w = std::ceil(config::kMapCellSize * config::kMapWidth / float(config::kMapGridCellSize));
-  int scaled_h = std::ceil(config::kMapCellSize * config::kMapHeight / float(config::kMapGridCellSize));
-
-  for(unsigned int i = 0; i < scaled_w; ++i) {
-    for(unsigned int j = 0; j < scaled_h; ++j) {
-      grid_sprite_.setPosition(float(config::kMapGridCellSize * i), float(config::kMapGridCellSize * j));
-      window_.draw(grid_sprite_);
+    int draw_start = -line_height / 2 + config::kWindowHeight / 2;
+    if (draw_start < 0) {
+      draw_start = 0;
     }
-  }
-}
-
-void Game::DrawMap() {
-  for(int i = 0; i < config::kMapWidth; ++i) {
-    for(int j = 0; j < config::kMapHeight; ++j) {
-      if (map_[i][j] == Cell::kWall) {
-        wall_sprite_.setPosition(float(config::kMapCellSize * i), float(config::kMapCellSize * j));
-        window_.draw(wall_sprite_);
-      }
+    int draw_end = line_height / 2 + config::kWindowHeight / 2;
+    if (draw_end >= config::kWindowHeight) {
+      draw_end = config::kWindowHeight - 1;
     }
-  }
-}
 
-void Game::DrawPlayer() {
-  float frame_angle = 360.f * config::kMapCellSize / player_texture_.getSize().x;
-  float shifted_direction = dgm::ToValidDegrees(player_.Pov() + 0.5f * frame_angle);
+    int tex_num = world_map_[map_x][map_y] - 1;
 
-  player_sprite_.setPosition(std::round(config::kMapCellSize * player_.X() / config::kCellSize), std::round(config::kMapCellSize * player_.Y() / config::kCellSize));
-  player_sprite_.setTextureRect(sf::IntRect(int(config::kMapCellSize * std::floor(shifted_direction / frame_angle)), 0, config::kMapCellSize, config::kMapCellSize));
+    float wall_x;
+    if (!side) {
+      wall_x = player_.Y() + perp_wall_dist * ray_dir_y;
+    } else {
+      wall_x = player_.X() + perp_wall_dist * ray_dir_x;
+    }
 
-  window_.draw(player_sprite_);
-}
+    wall_x -= std::floor(wall_x);
 
-void Game::DrawRays() {
-  float start_x = player_.X() + 0.5f * config::kCellSize;
-  float start_y = player_.Y() + 0.5f * config::kCellSize;
+    auto tex_x = static_cast<int>(wall_x * static_cast<float>(config::kTexWidth));
+    if (!side && ray_dir_x > 0) {
+      tex_x = config::kTexWidth - tex_x - 1;
+    }
+    if (side && ray_dir_y < 0) {
+      tex_x = config::kTexWidth - tex_x - 1;
+    }
+    float step = 1.0f * config::kTexHeight / line_height;
 
-  sf::VertexArray fov_visualization(sf::TriangleFan, config::kWindowWidth + 1);
-  fov_visualization[0].position = sf::Vector2f(config::kMapCellSize * start_x / config::kCellSize, config::kMapCellSize * start_y / config::kCellSize);
-  for (int i = 0; i < config::kWindowWidth; ++i) {
-    float ray_direction = dgm::ToValidDegrees(player_.Pov() + config::kFov * (std::floor(0.5f * config::kWindowWidth) - i - 1) / (config::kWindowWidth - 1));
-    fov_visualization[i + 1].position = sf::Vector2f(config::kMapCellSize * (start_x + view_rays_[i] * std::cos(dgm::DegreeToRadians(ray_direction))) / config::kCellSize,
-                                                     config::kMapCellSize * (start_y - view_rays_[i] * std::sin(dgm::DegreeToRadians(ray_direction))) / config::kCellSize);
-  }
-  window_.draw(fov_visualization);
-}
-
-void Game::Draw3dSpace() {
-  float projection_distance =  0.5f * config::kCellSize / std::tan(dgm::DegreeToRadians(0.5f * 58.75f));
-  float ray_start_x = player_.X() + 0.5f * config::kCellSize;
-  float ray_start_y = player_.Y() + 0.5f * config::kCellSize;
-
-  int previous_column = std::numeric_limits<int>::min();
-
-  sf::RectangleShape floor_shape(sf::Vector2f(config::kWindowWidth, 0.5f * config::kWindowHeight));
-  floor_shape.setFillColor(sf::Color(36, 219, 0));
-  floor_shape.setPosition(0.0f, 0.5f * config::kWindowHeight);
-
-  window_.draw(floor_shape);
-
-  for(int i = 0; i < config::kWindowWidth; ++i) {
-      float ray_direction = config::kFov * (std::floor(0.5f * config::kWindowWidth) - i) / (config::kWindowWidth - 1);
-      float ray_projection_position = 0.5f * std::tan(dgm::DegreeToRadians(ray_direction)) / std::tan(dgm::DegreeToRadians(0.5f * config::kFov));
-
-      auto current_column = int(std::round(config::kWindowWidth * (0.5f - ray_projection_position)));
-      auto next_column = config::kWindowWidth;
-
-      if (i < config::kWindowWidth - 1) {
-        float next_ray_direction = config::kFov * (std::floor(0.5f * config::kWindowWidth) - i - 1) / (config::kWindowWidth - 1);
-
-        ray_projection_position = 0.5f * std::tan(dgm::DegreeToRadians(next_ray_direction)) / std::tan(dgm::DegreeToRadians(0.5f * config::kFov));
-
-        next_column = int(std::round(config::kWindowWidth * (0.5f - ray_projection_position)));
+    float tex_pos = (draw_start - config::kWindowHeight / 2 + line_height / 2) * step;
+    for (int y = draw_start; y < draw_end; ++y) {
+      int tex_y = static_cast<int>(tex_pos) & (config::kTexHeight - 1);
+      tex_pos += step;
+      sf::Color color = textures_[tex_num].getPixel(tex_x, tex_y);
+      if (side) {
+        color = DarkerColor(color);
       }
-
-      if (previous_column < current_column) {
-        float ray_end_x = ray_start_x + view_rays_[i] * std::cos(dgm::DegreeToRadians(dgm::ToValidDegrees(player_.Pov() + ray_direction)));
-        float ray_end_y = ray_start_y - view_rays_[i] * std::sin(dgm::DegreeToRadians(dgm::ToValidDegrees(player_.Pov() + ray_direction)));
-        float wall_texture_column_x;
-
-        auto brightness = int(std::round(255 * std::max<float>(0, 2 * view_rays_[i] / config::kRenderDistance - 1)));
-        auto column_height = int(config::kWindowHeight * projection_distance / (view_rays_[i] * std::cos(dgm::DegreeToRadians(ray_direction))));
-
-        sf::RectangleShape shape(sf::Vector2f(std::max(1, next_column - current_column), column_height));
-        shape.setFillColor(sf::Color(73, 255, 255, brightness));
-        shape.setPosition(current_column, std::round(0.5f * (config::kWindowHeight - column_height)));
-
-        previous_column = current_column;
-
-        if (std::abs(ray_end_x - config::kCellSize * std::round(ray_end_x / config::kCellSize)) <
-            std::abs(ray_end_y - config::kCellSize * std::round(ray_end_y / config::kCellSize))) {
-          wall_texture_column_x = ray_end_y - config::kCellSize * std::floor(ray_end_y / config::kCellSize);
-        } else {
-          wall_texture_column_x = config::kCellSize * std::ceil(ray_end_x / config::kCellSize) - ray_end_x;
-        }
-
-        ig_wall_sprite_.setPosition(current_column, std::round(0.5f * (config::kWindowHeight - column_height)));
-        ig_wall_sprite_.setTextureRect(sf::IntRect(int(std::round(wall_texture_column_x)), 0, 1, config::kCellSize));
-        ig_wall_sprite_.setScale(std::max(1, next_column - current_column), column_height / float(config::kCellSize));
-
-        window_.draw(ig_wall_sprite_);
-        window_.draw(shape);
-      }
-  }
-}
-
-
-void Game::Loop() {
-  sf::Event event;
-  auto previous_time = std::chrono::steady_clock::now();
-  std::chrono::microseconds lag(0);
-
-  while(window_.isOpen()) {
-    auto delta_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - previous_time);
-    lag += delta_time;
-    previous_time += delta_time;
-    while (lag >= rcg::config::kFrameDuration) {
-      lag -= rcg::config::kFrameDuration;
-      while (window_.pollEvent(event)) {
-        if (event.type == sf::Event::Closed) {
-          window_.close();
-          break;
-        }
-      }
-      UpdatePlayer();
-      UpdateRays();
-      if (lag < rcg::config::kFrameDuration) {
-        window_.clear(sf::Color::Blue);
-        Draw3dSpace();
-        DrawMapCells();
-        DrawMap();
-        DrawPlayer();
-        DrawRays();
-      }
-      window_.display();
+      buffer.setPixel(x, y, color);
     }
   }
 }
 
+void Game::UpdateView(sf::Image& buffer) {
+  sf::Texture texture;
+  texture.create(config::kWindowWidth, config::kWindowHeight);
+  texture.loadFromImage(buffer);
+  sf::Sprite sprite(texture);
+
+  window_.draw(sprite);
+}
+
+void Game::MainLoop() {
+  sf::Clock clock = sf::Clock();
+  sf::Time fps;
+  sf::Image buffer;
+  buffer.create(config::kWindowWidth, config::kWindowHeight);
+
+  while (window_.isOpen()) {
+    sf::Event event;
+    while (window_.pollEvent(event)) {
+      if (event.type == sf::Event::Closed) {
+        window_.close();
+      }
+    }
+    window_.clear();
+
+    Raycast(buffer);
+    UpdateView(buffer);
+
+    fps = clock.getElapsedTime();
+    clock.restart();
+
+    UpdatePlayer(fps.asSeconds());
+
+    window_.display();
+  }
+}
 
 } // namespace rcg
