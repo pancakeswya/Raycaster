@@ -1,0 +1,1 @@
+/usr/bin/g++-12 -O3 -DNDEBUG CMakeFiles/untitled1.dir/main.cc.o CMakeFiles/untitled1.dir/game.cc.o CMakeFiles/untitled1.dir/player.cc.o -o untitled1  -lsfml-graphics -lsfml-window -lsfml-system 

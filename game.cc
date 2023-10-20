@@ -1,8 +1,10 @@
 #include "game.h"
 #include "config.h"
 
+#include <array>
 #include <cmath>
 #include <iostream>
+#include <algorithm>
 
 namespace rcg {
 
@@ -23,6 +25,19 @@ inline sf::Color DarkerColor(sf::Color color) noexcept {
   color.g /= config::kShadingCoef;
   color.b /= config::kShadingCoef;
   return color;
+}
+
+void SortSprites(std::array<int, config::kSpriteCount>& order, std::array<double, config::kSpriteCount>& dist) {
+  std::vector<std::pair<double, int>> sprites(config::kSpriteCount);
+  for(int i = 0; i < config::kSpriteCount; ++i) {
+    sprites[i].first = dist[i];
+    sprites[i].second = order[i];
+  }
+  std::sort(sprites.begin(), sprites.end());
+  for(int i = 0; i < config::kSpriteCount; i++) {
+    dist[i] = sprites[config::kSpriteCount - i - 1].first;
+    order[i] = sprites[config::kSpriteCount - i - 1].second;
+  }
 }
 
 } // namespace
@@ -55,6 +70,11 @@ inline void Game::LoadTextures() {
   loaded_ &= textures_[5].loadFromFile("pics/mossy.png");
   loaded_ &= textures_[6].loadFromFile("pics/wood.png");
   loaded_ &= textures_[7].loadFromFile("pics/colorstone.png");
+
+  loaded_ &= textures_[8].loadFromFile("pics/barrel.png");
+  loaded_ &= textures_[9].loadFromFile("pics/pillar.png");
+  loaded_ &= textures_[10].loadFromFile("pics/greenlight.png");
+
   loaded_ &= pistol_textures_[0].loadFromFile("pics/pistol0.png");
   loaded_ &= pistol_textures_[1].loadFromFile("pics/pistol1.png");
   loaded_ &= pistol_textures_[2].loadFromFile("pics/pistol2.png");
@@ -62,7 +82,45 @@ inline void Game::LoadTextures() {
   loaded_ &= pistol_textures_[4].loadFromFile("pics/pistol4.png");
 }
 
+struct Sprite
+{
+  double x;
+  double y;
+  int texture;
+};
+
+Sprite sprite[config::kSpriteCount] = {
+        {20.5, 11.5, 10},
+        {18.5,4.5, 10},
+        {10.0,4.5, 10},
+        {10.0,12.5,10},
+        {3.5, 6.5, 10},
+        {3.5, 20.5,10},
+        {3.5, 14.5,10},
+        {14.5,20.5,10},
+
+        {18.5, 10.5, 9},
+        {18.5, 11.5, 9},
+        {18.5, 12.5, 9},
+
+        {21.5, 1.5, 8},
+        {15.5, 1.5, 8},
+        {16.0, 1.8, 8},
+        {16.2, 1.2, 8},
+        {3.5,  2.5, 8},
+        {9.5, 15.5, 8},
+        {10.0, 15.1,8},
+        {10.5, 15.8,8},
+};
+
 void Game::Raycast(sf::Image& buffer) {
+  //parameters for scaling and moving the sprites
+  constexpr int u_div = 1;
+  constexpr int v_div  = 1;
+  constexpr float v_move = 0.0f;
+  std::array<double, config::kWindowWidth> z_buffer;
+  std::array<int,config::kSpriteCount> sprite_order;
+  std::array<double, config::kSpriteCount> sprite_distance;
   // cast a floor
   for (int y = config::kWindowHeight / 2 + 1; y < config::kWindowHeight; ++y) {
     float ray_dir_x0 = player_.DirX() - player_.PlaneX();
@@ -174,7 +232,7 @@ void Game::Raycast(sf::Image& buffer) {
 
     wall_x -= std::floor(wall_x);
 
-    auto tex_x = static_cast<int>(wall_x * static_cast<float>(config::kTexWidth));
+    auto tex_x = static_cast<long long int>(wall_x * static_cast<float>(config::kTexWidth));
     if (!side && ray_dir_x > 0.0f) {
       tex_x = config::kTexWidth - tex_x - 1;
     }
@@ -185,7 +243,7 @@ void Game::Raycast(sf::Image& buffer) {
 
     float tex_pos = (draw_start - config::kWindowHeight / 2 + line_height / 2) * step;
     for (int y = draw_start; y < draw_end; ++y) {
-      int tex_y = static_cast<int>(tex_pos) & (config::kTexHeight - 1);
+      long long int tex_y = static_cast<int>(tex_pos) & (config::kTexHeight - 1);
       tex_pos += step;
       sf::Color color = textures_[tex_num].getPixel(tex_x, tex_y);
       if (side) {
@@ -193,7 +251,64 @@ void Game::Raycast(sf::Image& buffer) {
       }
       buffer.setPixel(x, y, color);
     }
+    z_buffer[x] = perp_wall_dist;
   }
+// Cast sprites
+  for(int i = 0; i < config::kSpriteCount; ++i) {
+    sprite_order[i] = i;
+    sprite_distance[i] = ((player_.X() - sprite[i].x) * (player_.X() - sprite[i].x) + (player_.Y() - sprite[i].y) * (player_.Y() - sprite[i].y));
+  }
+  SortSprites(sprite_order, sprite_distance);
+
+  for(int order : sprite_order) {
+    double sprite_x = sprite[order].x - player_.X();
+    double sprite_y = sprite[order].y - player_.Y();
+
+    double inv_det = 1.0 / (player_.PlaneX() * player_.DirY() - player_.DirX() * player_.PlaneY());
+
+    double transform_x = inv_det * (player_.DirY() * sprite_x - player_.DirX() * sprite_y);
+    double transform_y = inv_det * (-player_.PlaneY() * sprite_x + player_.PlaneX() * sprite_y); //this is actually the depth inside the screen, that what Z is in 3D, the distance of sprite to player, matching sqrt(spriteDistance[i])
+
+    auto sprite_screen_x = static_cast<int>((config::kWindowWidth / 2) * (1 + transform_x / transform_y));
+
+    auto v_move_screen = static_cast<int>(v_move / transform_y);
+
+    int sprite_height = std::abs(static_cast<int>(config::kWindowHeight / (transform_y))) / v_div; //using "transformY" instead of the real distance prevents fisheye
+
+    int draw_start_y = -sprite_height / 2 + config::kWindowHeight / 2 + v_move_screen;
+    if (draw_start_y < 0) {
+      draw_start_y = 0;
+    }
+    int draw_end_y = sprite_height / 2 + config::kWindowHeight / 2 + v_move_screen;
+    if (draw_end_y >= config::kWindowHeight) {
+      draw_end_y = config::kWindowHeight - 1;
+    }
+
+    int sprite_width = std::abs(static_cast<int>(config::kWindowHeight / (transform_y))) / u_div;
+    int draw_start_x = -sprite_width / 2 + sprite_screen_x;
+    if (draw_start_x < 0) {
+      draw_start_x = 0;
+    }
+    int draw_end_x = sprite_width / 2 + sprite_screen_x;
+    if (draw_end_x > config::kWindowWidth) {
+      draw_end_x = config::kWindowWidth;
+    }
+    for (int stripe = draw_start_x; stripe < draw_end_x; ++stripe) {
+      long long int tex_x = static_cast<long long int>(256 * (stripe - (-sprite_width / 2 + sprite_screen_x)) * config::kTexWidth / sprite_width) / 256;
+
+      if(transform_y > 0 && transform_y < z_buffer[stripe]) {
+        for(int y = draw_start_y; y < draw_end_y; ++y) {
+          long long int d = (y - v_move_screen) * 256 - config::kWindowHeight * 128 + sprite_height * 128;
+          long long int tex_y = ((d * config::kTexHeight) / sprite_height) / 256;
+          sf::Color color = textures_[sprite[order].texture].getPixel(tex_x, tex_y);
+          if (color != sf::Color::Black) {
+            buffer.setPixel(stripe, y, DarkerColor(color));
+          }
+        }
+      }
+    }
+  }
+
 }
 
 void Game::UpdateView(sf::Image& buffer) {

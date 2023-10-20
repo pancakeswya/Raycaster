@@ -18,7 +18,8 @@ constexpr int kTexHeight = 64;
 constexpr int kMapWidth = 24;
 constexpr int kMapHeight = 24;
 
-constexpr int kTextureCount = 8;
+constexpr int kTextureCount = 12;
+constexpr int kSpriteCount = 20;
 constexpr int kPistolTextureCount = 5;
 constexpr int kFloorTexture = 3;
 constexpr int kCeilTexture = 6;
