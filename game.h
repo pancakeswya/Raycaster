@@ -16,6 +16,7 @@ class Game {
   [[nodiscard]] bool Loaded() noexcept;
   void MainLoop();
  protected:
+  void LoadTextures();
   void Raycast(sf::Image& buffer);
   void UpdateView(sf::Image& buffer);
   void UpdatePlayer(float frame_time);
@@ -23,6 +24,7 @@ class Game {
   bool loaded_;
   sf::RenderWindow window_;
   std::vector<sf::Image> textures_;
+  std::vector<sf::Texture> pistol_textures_;
   Player player_;
   std::vector<std::vector<int>> world_map_;
 };

@@ -6,8 +6,10 @@ namespace rcg::config {
 constexpr int kWindowWidth = 640;
 constexpr int kWindowHeight = 480;
 constexpr int kResizeWindow = 2;
+constexpr int kWindowCenterX = config::kResizeWindow * config::kWindowWidth / 2;
 
 constexpr int kFps = 60;
+constexpr int kPistolAnimationDuration = 75000;
 
 constexpr int kShadingCoef = 2;
 
@@ -17,6 +19,7 @@ constexpr int kMapWidth = 24;
 constexpr int kMapHeight = 24;
 
 constexpr int kTextureCount = 8;
+constexpr int kPistolTextureCount = 5;
 constexpr int kFloorTexture = 3;
 constexpr int kCeilTexture = 6;
 

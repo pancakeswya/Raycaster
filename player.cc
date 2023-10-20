@@ -5,63 +5,46 @@
 
 namespace rcg {
 
-void Player::SetMoveSpeed(float speed) noexcept {
-  movement_speed_ = speed;
+void Player::MoveForwardX(float step) noexcept {
+  x_ += dir_x_ * step;
 }
 
-void Player::SetRotationSpeed(float speed) noexcept {
-  rotation_speed_ = speed;
+void Player::MoveForwardY(float step) noexcept {
+  y_ += dir_y_ * step;
 }
 
-void Player::MoveForwardX() noexcept {
-  x_ += dir_x_ * movement_speed_;
+void Player::MoveBackwardX(float step) noexcept {
+  x_ -= dir_x_ * step;
 }
 
-void Player::MoveForwardY() noexcept {
-  y_ += dir_y_ * movement_speed_;
+void Player::MoveBackwardY(float step) noexcept {
+  y_ -= dir_y_ * step;
 }
 
-void Player::MoveBackwardX() noexcept {
-  x_ -= dir_x_ * movement_speed_;
+void Player::MoveLeftX(float step) noexcept {
+  x_ -= plane_x_ * step;
 }
 
-void Player::MoveBackwardY() noexcept {
-  y_ -= dir_y_ * movement_speed_;
+void Player::MoveLeftY(float step) noexcept {
+  y_ -= plane_y_ * step;
 }
 
-void Player::MoveLeftX() noexcept {
-  x_ -= plane_x_ * movement_speed_;
+void Player::MoveRightX(float step) noexcept {
+  x_ += plane_x_ * step;
 }
 
-void Player::MoveLeftY() noexcept {
-  y_ -= plane_y_ * movement_speed_;
+void Player::MoveRightY(float step) noexcept {
+  y_ += plane_y_ * step;
 }
 
-void Player::MoveRightX() noexcept {
-  x_ += plane_x_ * movement_speed_;
-}
+void Player::RotateX(float degree) noexcept {
 
-void Player::MoveRightY() noexcept {
-  y_ += plane_y_ * movement_speed_;
-}
-
-void Player::RotateLeft() noexcept {
   float old_dir_x = dir_x_;
-  dir_x_ = dir_x_ * std::cos(rotation_speed_) - dir_y_ * std::sin(rotation_speed_);
-  dir_y_ = old_dir_x * std::sin(rotation_speed_) + dir_y_ * std::cos(rotation_speed_);
+  dir_x_ = dir_x_ * std::cos(degree) - dir_y_ * std::sin(degree);
+  dir_y_ = old_dir_x * std::sin(degree) + dir_y_ * std::cos(degree);
   float old_plane_x = plane_x_;
-  plane_x_ = plane_x_ * std::cos(rotation_speed_) - plane_y_ * std::sin(rotation_speed_);
-  plane_y_ = old_plane_x * std::sin(rotation_speed_) + plane_y_ * std::cos(rotation_speed_);
+  plane_x_ = plane_x_ * std::cos(degree) - plane_y_ * std::sin(degree);
+  plane_y_ = old_plane_x * std::sin(degree) + plane_y_ * std::cos(degree);
 }
-
-void Player::RotateRight() noexcept {
-  float old_dir_x = dir_x_;
-  dir_x_ = dir_x_ * std::cos(-rotation_speed_) - dir_y_ * std::sin(-rotation_speed_);
-  dir_y_ = old_dir_x * std::sin(-rotation_speed_) + dir_y_ * std::cos(-rotation_speed_);
-  float old_plane_x = plane_x_;
-  plane_x_ = plane_x_ * std::cos(-rotation_speed_) - plane_y_ * std::sin(-rotation_speed_);
-  plane_y_ = old_plane_x * std::sin(-rotation_speed_) + plane_y_ * std::cos(-rotation_speed_);
-}
-
 
 } // namespace rcg

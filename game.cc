@@ -1,8 +1,8 @@
 #include "game.h"
-#include "player.h"
 #include "config.h"
 
 #include <cmath>
+#include <iostream>
 
 namespace rcg {
 
@@ -27,52 +27,6 @@ inline sf::Color DarkerColor(sf::Color color) noexcept {
 
 } // namespace
 
-void Game::UpdatePlayer(float frame_time) {
-  float move_speed = frame_time * config::kMoveSpeed;
-  float rotation_speed = frame_time * config::kRotationSpeed;
-
-  player_.SetMoveSpeed(move_speed);
-  player_.SetRotationSpeed(rotation_speed);
-
-  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
-    player_.RotateLeft();
-  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
-    player_.RotateRight();
-  }
-
-  if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
-    if (!world_map_[int(player_.X() - player_.DirX() * move_speed)][int(player_.Y())]) {
-      player_.MoveBackwardX();
-    }
-    if (!world_map_[int(player_.X())][int(player_.Y()  - player_.DirY() * move_speed)]) {
-      player_.MoveBackwardY();
-    }
-  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
-    if (!world_map_[int(player_.X() + player_.DirX() * move_speed)][int(player_.Y())]) {
-      player_.MoveForwardX();
-    }
-    if (!world_map_[int(player_.X())][int(player_.Y()  + player_.DirY() * move_speed)]) {
-      player_.MoveForwardY();
-    }
-  }
-
-  if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
-    if (!world_map_[int(player_.X() - player_.PlaneX() * move_speed)][int(player_.Y())]) {
-      player_.MoveLeftX();
-    }
-    if (!world_map_[int(player_.X())][int(player_.Y()  - player_.PlaneY() * move_speed)]) {
-      player_.MoveLeftY();
-    }
-  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
-    if (!world_map_[int(player_.X() + player_.PlaneX() * move_speed)][int(player_.Y())]) {
-      player_.MoveRightX();
-    }
-    if (!world_map_[int(player_.X())][int(player_.Y()  + player_.PlaneY() * move_speed)]) {
-      player_.MoveRightY();
-    }
-  }
-}
-
 Game::Game(std::string_view name)
     : player_(config::kStartX, config::kStartY,
               config::kStartDirX, config::kStartDirY,
@@ -80,10 +34,19 @@ Game::Game(std::string_view name)
       loaded_(true),
       window_(sf::VideoMode(config::kWindowWidth, config::kWindowHeight), name.data(), sf::Style::Close),
       textures_(config::kTextureCount),
+      pistol_textures_(config::kPistolTextureCount),
       world_map_(LoadMap()) {
   window_.setSize(sf::Vector2u(config::kResizeWindow * config::kWindowWidth,
                                config::kResizeWindow * config::kWindowHeight));
   window_.setFramerateLimit(config::kFps);
+  LoadTextures();
+}
+
+bool Game::Loaded() noexcept {
+  return loaded_;
+}
+
+inline void Game::LoadTextures() {
   loaded_ &= textures_[0].loadFromFile("pics/eagle.png");
   loaded_ &= textures_[1].loadFromFile("pics/redbrick.png");
   loaded_ &= textures_[2].loadFromFile("pics/purplestone.png");
@@ -92,10 +55,11 @@ Game::Game(std::string_view name)
   loaded_ &= textures_[5].loadFromFile("pics/mossy.png");
   loaded_ &= textures_[6].loadFromFile("pics/wood.png");
   loaded_ &= textures_[7].loadFromFile("pics/colorstone.png");
-}
-
-bool Game::Loaded() noexcept {
-  return loaded_;
+  loaded_ &= pistol_textures_[0].loadFromFile("pics/pistol0.png");
+  loaded_ &= pistol_textures_[1].loadFromFile("pics/pistol1.png");
+  loaded_ &= pistol_textures_[2].loadFromFile("pics/pistol2.png");
+  loaded_ &= pistol_textures_[3].loadFromFile("pics/pistol3.png");
+  loaded_ &= pistol_textures_[4].loadFromFile("pics/pistol4.png");
 }
 
 void Game::Raycast(sf::Image& buffer) {
@@ -180,7 +144,7 @@ void Game::Raycast(sf::Image& buffer) {
         map_y += step_y;
         side = true;
       }
-    } while (world_map_[map_x][map_y] <= 0);
+    } while (!world_map_[map_x][map_y]);
 
     if (!side) {
       perp_wall_dist = (side_dist_x - delta_dist_x);
@@ -211,10 +175,10 @@ void Game::Raycast(sf::Image& buffer) {
     wall_x -= std::floor(wall_x);
 
     auto tex_x = static_cast<int>(wall_x * static_cast<float>(config::kTexWidth));
-    if (!side && ray_dir_x > 0) {
+    if (!side && ray_dir_x > 0.0f) {
       tex_x = config::kTexWidth - tex_x - 1;
     }
-    if (side && ray_dir_y < 0) {
+    if (side && ray_dir_y < 0.0f) {
       tex_x = config::kTexWidth - tex_x - 1;
     }
     float step = 1.0f * config::kTexHeight / line_height;
@@ -241,29 +205,96 @@ void Game::UpdateView(sf::Image& buffer) {
   window_.draw(sprite);
 }
 
+void Game::UpdatePlayer(float frame_time) {
+  float step = frame_time * config::kMoveSpeed;
+
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q)) {
+    player_.RotateX(frame_time * config::kRotationSpeed);
+  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
+    player_.RotateX(frame_time * -config::kRotationSpeed);
+  }
+
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) {
+    if (!world_map_[int(player_.X() - player_.DirX() * step)][int(player_.Y())]) {
+      player_.MoveBackwardX(step);
+    }
+    if (!world_map_[int(player_.X())][int(player_.Y()  - player_.DirY() * step)]) {
+      player_.MoveBackwardY(step);
+    }
+  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) {
+    if (!world_map_[int(player_.X() + player_.DirX() * step)][int(player_.Y())]) {
+      player_.MoveForwardX(step);
+    }
+    if (!world_map_[int(player_.X())][int(player_.Y()  + player_.DirY() * step)]) {
+      player_.MoveForwardY(step);
+    }
+  }
+
+  if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) {
+    if (!world_map_[int(player_.X() - player_.PlaneX() * step)][int(player_.Y())]) {
+      player_.MoveLeftX(step);
+    }
+    if (!world_map_[int(player_.X())][int(player_.Y()  - player_.PlaneY() * step)]) {
+      player_.MoveLeftY(step);
+    }
+  } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) {
+    if (!world_map_[int(player_.X() + player_.PlaneX() * step)][int(player_.Y())]) {
+      player_.MoveRightX(step);
+    }
+    if (!world_map_[int(player_.X())][int(player_.Y()  + player_.PlaneY() * step)]) {
+      player_.MoveRightY(step);
+    }
+  }
+}
+
 void Game::MainLoop() {
-  sf::Clock clock = sf::Clock();
-  sf::Time fps;
+  sf::Clock clock_frames, clock_pistol;
   sf::Image buffer;
   buffer.create(config::kWindowWidth, config::kWindowHeight);
+
+  sf::Sprite pistol_sprite;
+  {
+    // init pistol sprite
+    pistol_sprite.setTexture(pistol_textures_[0]);
+    float c = config::kWindowHeight / pistol_sprite.getLocalBounds().height;
+    pistol_sprite.setScale(c, c);
+    float off = (config::kWindowWidth - pistol_sprite.getLocalBounds().width * c) * 0.5f;
+    pistol_sprite.setPosition(off, 0.0f);
+  }
+  bool shot = false;
+  int pistol_tex_num = 1;
 
   while (window_.isOpen()) {
     sf::Event event;
     while (window_.pollEvent(event)) {
       if (event.type == sf::Event::Closed) {
         window_.close();
+      } else if (event.type == sf::Event::MouseButtonPressed &&
+          event.mouseButton.button == sf::Mouse::Left) {
+        shot = true;
       }
     }
+    auto pistol_ticks = clock_pistol.getElapsedTime();
+    if (shot && pistol_ticks.asMicroseconds() > config::kPistolAnimationDuration) {
+      // play pistol animation
+      if (pistol_tex_num == 5) {
+        shot = false;
+        pistol_tex_num = 0;
+      }
+      pistol_sprite.setTexture(pistol_textures_[pistol_tex_num++]);
+      clock_pistol.restart();
+    }
+
     window_.clear();
 
     Raycast(buffer);
     UpdateView(buffer);
 
-    fps = clock.getElapsedTime();
-    clock.restart();
+    auto fps = clock_frames.getElapsedTime();
+    clock_frames.restart();
 
     UpdatePlayer(fps.asSeconds());
-
+    window_.draw(pistol_sprite);
     window_.display();
   }
 }

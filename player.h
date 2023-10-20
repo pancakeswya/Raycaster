@@ -14,30 +14,23 @@ class Player {
   [[nodiscard]] float DirY() const noexcept;
   [[nodiscard]] float PlaneX() const noexcept;
   [[nodiscard]] float PlaneY() const noexcept;
-  [[nodiscard]] float MoveSpeed() const noexcept;
-  [[nodiscard]] float RotationSpeed() const noexcept;
 
   void SetX(float x) noexcept;
   void SetY(float y) noexcept;
 
-  void SetMoveSpeed(float speed) noexcept;
-  void SetRotationSpeed(float speed) noexcept;
-
-  void MoveForwardX() noexcept;
-  void MoveForwardY() noexcept;
-  void MoveBackwardX() noexcept;
-  void MoveBackwardY() noexcept;
-  void MoveLeftX() noexcept;
-  void MoveLeftY() noexcept;
-  void MoveRightX() noexcept;
-  void MoveRightY() noexcept;
-  void RotateLeft() noexcept;
-  void RotateRight() noexcept;
+  void MoveForwardX(float step) noexcept;
+  void MoveForwardY(float step) noexcept;
+  void MoveBackwardX(float step) noexcept;
+  void MoveBackwardY(float step) noexcept;
+  void MoveLeftX(float step) noexcept;
+  void MoveLeftY(float step) noexcept;
+  void MoveRightX(float step) noexcept;
+  void MoveRightY(float step) noexcept;
+  void RotateX(float degree) noexcept;
  private:
   float x_, y_;
   float dir_x_, dir_y_;
   float plane_x_, plane_y_;
-  float rotation_speed_{}, movement_speed_{};
 };
 
 inline Player::Player(float x, float y,
@@ -69,14 +62,6 @@ inline float Player::Y() const noexcept {
 
 [[nodiscard]] inline float Player::PlaneY() const noexcept {
   return plane_y_;
-}
-
-[[nodiscard]] inline float Player::MoveSpeed() const noexcept {
-  return movement_speed_;
-}
-
-[[nodiscard]] inline float Player::RotationSpeed() const noexcept {
-  return rotation_speed_;
 }
 
 inline void Player::SetX(float x) noexcept {
